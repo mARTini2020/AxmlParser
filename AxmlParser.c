@@ -19,6 +19,8 @@
 
 #endif /* _WIN32 */
 
+#define new(SIZE) memset(malloc(SIZE), 0, SIZE)
+
 #include "AxmlParser.h"
 
 /* chunks' magic numbers */
@@ -210,7 +212,7 @@ ParseStringChunk(Parser_t *ap)
 	styleOffset = GetInt32(ap);
 
 	/* strings' offsets table */
-	ap->st->offsets = (uint32_t *)malloc(ap->st->count * sizeof(uint32_t));
+	ap->st->offsets = (uint32_t *)new(ap->st->count * sizeof(uint32_t));
 	if(ap->st->offsets == NULL)
 	{
 		fprintf(stderr, "Error: init strings' offsets table.\n");
@@ -221,7 +223,7 @@ ParseStringChunk(Parser_t *ap)
 		ap->st->offsets[i] = GetInt32(ap);
 
 	/* init string table */
-	ap->st->strings = (unsigned char **)malloc(ap->st->count * sizeof(unsigned char *));
+	ap->st->strings = (unsigned char **)new(ap->st->count * sizeof(unsigned char *));
 	if(ap->st->strings == NULL)
 	{
 		fprintf(stderr, "Error: init string table.\n");
@@ -238,7 +240,7 @@ ParseStringChunk(Parser_t *ap)
 
 	/* save string raw data */
 	ap->st->len = (styleOffset ? styleOffset : chunkSize) - stringOffset;
-	ap->st->data = (unsigned char *)malloc(ap->st->len);
+	ap->st->data = (unsigned char *)new(ap->st->len);
 	if(ap->st->data == NULL)
 	{
 		fprintf(stderr, "Error: init string raw data.\n");
@@ -295,7 +297,7 @@ AxmlOpen(char *buffer, size_t size)
 		return NULL;
 	}
 
-	ap = (Parser_t *)malloc(sizeof(Parser_t));
+	ap = (Parser_t *)new(sizeof(*ap));
 	if(ap == NULL)
 	{
 		fprintf(stderr, "Error: init parser.\n");
@@ -316,7 +318,7 @@ AxmlOpen(char *buffer, size_t size)
 	ap->tagUri = (uint32_t)(-1);
 	ap->text = (uint32_t)(-1);
 
-	ap->st = (StringTable_t *)malloc(sizeof(StringTable_t));
+	ap->st = (StringTable_t *)new(sizeof(*(ap->st)));
 	if(ap->st == NULL)
 	{
 		fprintf(stderr, "Error: init string table struct.\n");
@@ -353,6 +355,19 @@ AxmlClose(void *axml)
 
 	if(ap->st->data)
 		free(ap->st->data);
+
+    	while (ap->attr) {
+        	AttrStack_t * attr = ap->attr;
+        	ap->attr = attr->next;
+        	free(attr->list);
+        	free(attr);
+    	}
+
+    	while (ap->nsList) {
+        	NsRecord_t * nsList = ap->nsList;
+        	ap->nsList = nsList->next;
+        	free(nsList);
+    	}
 
 	if(ap->st->strings)
 	{
@@ -409,7 +424,7 @@ AxmlNext(void *axml)
 		uint32_t i;
 		AttrStack_t *attr;
 
-		attr = (AttrStack_t *)malloc(sizeof(AttrStack_t));
+		attr = (AttrStack_t *)new(sizeof(*attr));
 		if(attr == NULL)
 		{
 			fprintf(stderr, "Error: init attribute.\n");
@@ -423,8 +438,8 @@ AxmlNext(void *axml)
 		attr->count = GetInt32(ap) & 0x0000ffff;
 		SkipInt32(ap, 1);	/* classAttribute, unknown usage */
 
-		attr->list = (Attribute_t *)malloc(
-				attr->count * sizeof(Attribute_t));
+		attr->list = (Attribute_t *)new(
+				attr->count * sizeof(*(attr->list)));
 		if(attr->list == NULL)
 		{
 			fprintf(stderr, "Error: init attribute list.\n");
@@ -468,7 +483,7 @@ AxmlNext(void *axml)
 	}
 	else if(chunkType == CHUNK_STARTNS)
 	{
-		NsRecord_t *ns = (NsRecord_t *)malloc(sizeof(NsRecord_t));
+		NsRecord_t *ns = (NsRecord_t *)new(sizeof(*ns));
 		if(ns == NULL)
 		{
 			fprintf(stderr, "Error: init namespace.\n");
@@ -616,7 +631,7 @@ GetString(Parser_t *ap, uint32_t id)
 	if (isUTF8) {
 		size = *(uint8_t *)offset;
 		chNum = *(uint8_t *)(offset+1);
-		ap->st->strings[id] = (unsigned char *)malloc(chNum);
+		ap->st->strings[id] = (unsigned char *)new(chNum);
 		memcpy(ap->st->strings[id], offset+2, chNum);
 //		ap->st->strings[id][chNum] = 0;
 	} else {
@@ -624,7 +639,7 @@ GetString(Parser_t *ap, uint32_t id)
 		size = UTF16LEtoUTF8(NULL, offset+2, (size_t)chNum);
 		if(size == (size_t)-1)
 			return emptyString;
-		ap->st->strings[id] = (unsigned char *)malloc(size);
+		ap->st->strings[id] = (unsigned char *)new(size);
 		if(ap->st->strings[id] == NULL)
 			return emptyString;
 
@@ -727,7 +742,7 @@ AxmlGetAttrValue(void *axml, uint32_t i)
 		str = GetString(ap, ap->attr->list[i].string);
 
 		/* free by user */
-		buf = (char *)malloc(strlen(str)+1);
+		buf = (char *)new(strlen(str)+1);
 
 		memset(buf, 0, strlen(str)+1);
 		strncpy(buf, str, strlen(str));
@@ -738,7 +753,7 @@ AxmlGetAttrValue(void *axml, uint32_t i)
 	data = ap->attr->list[i].data;
 
 	/* free by user */
-	buf = (char *)malloc(32);
+	buf = (char *)new(32);
 	memset(buf, 0 ,32);
 
 	if(type == ATTR_NULL)
@@ -844,7 +859,7 @@ InitBuff(Buff_t *buf)
 	if(buf == NULL)
 		return -1;
 	buf->size = 32*1024;
-	buf->data = (char *)malloc(buf->size);
+	buf->data = (char *)new(buf->size);
 	if(buf->data == NULL)
 	{
 		fprintf(stderr, "Error: init buffer.\n");
